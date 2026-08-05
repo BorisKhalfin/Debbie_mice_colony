@@ -124,7 +124,7 @@ if search_tag:
 
 # 5. Главная панель: Дашборд
 st.title("🐭 Debbie Mice Colony Analysis")
-st.markdown("Интерактивный дашборд для анализа структуры колонии, генотипов и демографии.")
+st.markdown("Interactive dashboard for analyzing colony structure, genotypes, and demographics.")
 
 # Метрики (Key Metrics)
 col1, col2, col3, col4 = st.columns(4)
