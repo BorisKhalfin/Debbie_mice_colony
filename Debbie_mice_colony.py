@@ -2,32 +2,32 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Конфигурация страницы
+# 1. Config
 st.set_page_config(
     page_title="Debbie Mice Colony Dashboard",
     page_icon="🐭",
     layout="wide"
 )
 
-# 2. Кэширование загрузки и предобработки данных
+# 2. Cache
 @st.cache_data
 def load_data():
     df = pd.read_excel('Debbie_mice_colony.xlsx', sheet_name='Main', engine='openpyxl')
     
-    # Приведение даты рождения к типу datetime (ошибки/знаки '?' преобразуются в NaT)
+    # Datetime
     df['Birth_date_clean'] = pd.to_datetime(df['Birth_date'], errors='coerce')
     
-    # Нормализация наименований окраса (приведение к нижнему регистру)
+    # Color
     if 'Color' in df.columns:
         df['Color_clean'] = df['Color'].astype(str).str.strip().str.lower()
         df['Color_clean'] = df['Color_clean'].replace({'nan': 'unspecified', '?': 'unspecified'})
     else:
         df['Color_clean'] = 'unspecified'
         
-    # Преобразование Cre в человекочитаемый формат
+    # Cre from boolean to +/-
     df['Cre_status'] = df['Cre'].map({1.0: 'Cre+', 0.0: 'Cre-'}).fillna('Unknown')
     
-    # Форматирование Ear_Tag для корректного поиска
+    # Ear_Tag
     df['Ear_Tag_str'] = df['Ear_Tag'].astype(str).str.replace('.0', '', regex=False)
     
     return df
@@ -35,13 +35,13 @@ def load_data():
 try:
     df_raw = load_data()
 except Exception as e:
-    st.error(f"Ошибка загрузки файла 'Debbie_mice_colony.xlsx': {e}")
+    st.error(f"File unavailable 'Debbie_mice_colony.xlsx': {e}")
     st.stop()
 
-# 3. Боковая панель: Фильтры
+# 3. Filters
 st.sidebar.title("🔍 Colony Filters")
 
-# --- Фильтр 1: Генотип ---
+# Genotype filter
 all_genotypes = sorted([str(g) for g in df_raw['Genotype'].dropna().unique()])
 selected_genotypes = st.sidebar.multiselect(
     "Genotype", 
@@ -49,7 +49,7 @@ selected_genotypes = st.sidebar.multiselect(
     default=all_genotypes
 )
 
-# --- Фильтр 2: Пол ---
+# Sex filter
 all_sexes = sorted([str(s) for s in df_raw['Sex'].dropna().unique()])
 selected_sexes = st.sidebar.multiselect(
     "Sex", 
@@ -57,7 +57,7 @@ selected_sexes = st.sidebar.multiselect(
     default=all_sexes
 )
 
-# --- Фильтр 3: Статус Cre ---
+# Cre filter
 all_cre = sorted(df_raw['Cre_status'].unique())
 selected_cre = st.sidebar.multiselect(
     "Cre Status", 
@@ -65,7 +65,7 @@ selected_cre = st.sidebar.multiselect(
     default=all_cre
 )
 
-# --- Фильтр 4: Диапазон дат рождения ---
+# DOB filter
 valid_dates = df_raw['Birth_date_clean'].dropna()
 min_date = valid_dates.min().date()
 max_date = valid_dates.max().date()
@@ -77,7 +77,7 @@ date_range = st.sidebar.date_input(
     max_value=max_date
 )
 
-# --- Фильтр 5: Поиск по клетке (Cage ID) ---
+# Cage filter
 all_cages = sorted([str(c) for c in df_raw['Cage_ID'].dropna().unique()])
 selected_cages = st.sidebar.multiselect(
     "Cage ID (Optional)", 
@@ -85,25 +85,21 @@ selected_cages = st.sidebar.multiselect(
     default=[]
 )
 
-# --- Фильтр 6: Текстовый поиск по Ear Tag / Родителям ---
+# Parental filter
 search_tag = st.sidebar.text_input("Search Ear Tag / Parent ID", "").strip()
 
-# 4. Применение фильтрации
+# 4. Filters applied
 filtered_df = df_raw.copy()
 
-# Фильтрация по Genotype
 if selected_genotypes:
     filtered_df = filtered_df[filtered_df['Genotype'].astype(str).isin(selected_genotypes)]
 
-# Фильтрация по Sex
 if selected_sexes:
     filtered_df = filtered_df[filtered_df['Sex'].astype(str).isin(selected_sexes)]
 
-# Фильтрация по Cre
 if selected_cre:
     filtered_df = filtered_df[filtered_df['Cre_status'].isin(selected_cre)]
 
-# Фильтрация по Дате рождения
 if isinstance(date_range, tuple) and len(date_range) == 2:
     start_d, end_d = date_range
     filtered_df = filtered_df[
@@ -111,22 +107,20 @@ if isinstance(date_range, tuple) and len(date_range) == 2:
         (filtered_df['Birth_date_clean'].dt.date <= end_d)
     ]
 
-# Фильтрация по Cage_ID
 if selected_cages:
     filtered_df = filtered_df[filtered_df['Cage_ID'].astype(str).isin(selected_cages)]
 
-# Фильтрация по поисковому запросу
 if search_tag:
     tag_match = filtered_df['Ear_Tag_str'].str.contains(search_tag, case=False, na=False)
     father_match = filtered_df['Father'].astype(str).str.contains(search_tag, case=False, na=False)
     mother_match = filtered_df['Mother'].astype(str).str.contains(search_tag, case=False, na=False)
     filtered_df = filtered_df[tag_match | father_match | mother_match]
 
-# 5. Главная панель: Дашборд
+# 5. Dashboard
 st.title("🐭 Debbie Mice Colony Analysis")
 st.markdown("Interactive dashboard for analyzing colony structure, genotypes, and demographics.")
 
-# Метрики (Key Metrics)
+# Key Metrics)
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Mice (Filtered)", len(filtered_df))
 col2.metric("Unique Cages", filtered_df['Cage_ID'].nunique())
@@ -135,10 +129,9 @@ col4.metric("Males (m)", len(filtered_df[filtered_df['Sex'] == 'm']))
 
 st.divider()
 
-# 6. Научные графики (Чистый белый фон)
+# Graphs
 tab1, tab2, tab3 = st.tabs(["📊 Genotypes & Demographics", "📈 Birth Dynamics", "📋 Raw Data"])
 
-# Общий стиль для графиков с белым фоном
 white_layout = dict(
     plot_bgcolor='white',
     paper_bgcolor='white',
@@ -202,13 +195,13 @@ with tab2:
 with tab3:
     st.subheader("Filtered Colony Records")
     
-    # Столбцы для отображения
+    # Columns
     display_cols = ['Ear_Tag', 'Genotype', 'Cre_status', 'Flox_1', 'Flox_2', 'Sex', 'Color', 'Birth_date', 'Cage_ID', 'Breeding_cage', 'Father', 'Mother']
     existing_cols = [c for c in display_cols if c in filtered_df.columns]
     
     st.dataframe(filtered_df[existing_cols], use_container_width=True)
     
-    # Кнопка скачивания CSV
+    # CSV Download
     csv_data = filtered_df[existing_cols].to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Download Filtered Data as CSV",
