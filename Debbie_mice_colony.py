@@ -10,41 +10,34 @@ st.set_page_config(
 )
 
 # 2. Cache
-@st.cache_data(ttl=600)  # ttl=600 Refresh every 10 min
+@st.cache_data
 def load_data():
-    sheets = {
-       
-        "Fertility": "1525111892",
-        
-    }
+    df = pd.read_excel('Debbie_mice_colony.xlsx', sheet_name='Main', engine='openpyxl')
 
-    base_url = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=1525111892"
-
-    dataframes = {}
-    for name, gid in sheets.items():
-        url = base_url + gid
-        dataframes[name] = pd.read_csv(url)
-    df = dataframes["Fertility"].copy()
     # Datetime
     df['Birth_date_clean'] = pd.to_datetime(df['Birth_date'], errors='coerce')
-    
+
     # Color
     if 'Color' in df.columns:
         df['Color_clean'] = df['Color'].astype(str).str.strip().str.lower()
         df['Color_clean'] = df['Color_clean'].replace({'nan': 'unspecified', '?': 'unspecified'})
     else:
         df['Color_clean'] = 'unspecified'
-        
+
     # Cre from boolean to +/-
     df['Cre_status'] = df['Cre'].map({1.0: 'Cre+', 0.0: 'Cre-'}).fillna('Unknown')
-    
+
     # Ear_Tag
     df['Ear_Tag_str'] = df['Ear_Tag'].astype(str).str.replace('.0', '', regex=False)
-    
+
     return df
 
 try:
     df_raw = load_data()
+except Exception as e:
+    st.error(f"File unavailable 'Debbie_mice_colony.xlsx': {e}")
+    st.stop()
+
 
 # 3. Filters
 st.sidebar.title("🔍 Colony Filters")
