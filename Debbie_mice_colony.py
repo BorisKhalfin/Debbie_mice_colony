@@ -10,9 +10,20 @@ st.set_page_config(
 )
 
 # 2. Cache
-@st.cache_data
+@st.cache_data(ttl=600)  # ttl=600 Refresh every 10 min
 def load_data():
-    df = pd.read_excel('Debbie_mice_colony.xlsx', sheet_name='Main', engine='openpyxl')
+    sheets = {
+       
+        "Fertility": "1525111892",
+        
+    }
+
+    base_url = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid="
+
+    dataframes = {}
+    for name, gid in sheets.items():
+        url = base_url + gid
+        dataframes[name] = pd.read_csv(url)
     
     # Datetime
     df['Birth_date_clean'] = pd.to_datetime(df['Birth_date'], errors='coerce')
