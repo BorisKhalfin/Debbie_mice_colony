@@ -158,6 +158,23 @@ with tab1:
         fig_geno.update_layout(**white_layout)
         st.plotly_chart(fig_geno, use_container_width=True)
 
+        # Таблица сводки генотипов (без учета пола)
+        st.markdown("**Genotype Summary**")
+        if not filtered_df.empty:
+            geno_summary = filtered_df['Genotype'].value_counts(dropna=False).reset_index()
+            geno_summary.columns = ['Genotype', 'Count']
+            
+            total_mice = len(filtered_df)
+            geno_summary['Percentage'] = (geno_summary['Count'] / total_mice * 100).map("{:.1f}%".format)
+            
+            st.dataframe(
+                geno_summary,
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No data available for the selected filters.")
+
     with col_g2:
         st.subheader("Cre Status Ratio")
         cre_counts = filtered_df['Cre_status'].value_counts().reset_index()
