@@ -18,7 +18,7 @@ def load_data():
         
     }
 
-    base_url = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid="
+    base_url = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=1525111892"
 
     dataframes = {}
     for name, gid in sheets.items():
@@ -45,9 +45,6 @@ def load_data():
 
 try:
     df_raw = load_data()
-except Exception as e:
-    st.error(f"File unavailable 'Debbie_mice_colony.xlsx': {e}")
-    st.stop()
 
 # 3. Filters
 st.sidebar.title("🔍 Colony Filters")
