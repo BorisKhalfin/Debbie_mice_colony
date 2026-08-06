@@ -24,7 +24,7 @@ def load_data():
     for name, gid in sheets.items():
         url = base_url + gid
         dataframes[name] = pd.read_csv(url)
-    
+    df = dataframes["Fertility"].copy()
     # Datetime
     df['Birth_date_clean'] = pd.to_datetime(df['Birth_date'], errors='coerce')
     
