@@ -144,7 +144,7 @@ with tab1:
     col_g1, col_g2 = st.columns(2)
     
     with col_g1:
-        st.subheader("Genotype Distribution by Sex")
+        st.subheader("Mice Distribution by Genotype and Sex")
         geno_sex = filtered_df.groupby(['Genotype', 'Sex']).size().reset_index(name='Count')
         fig_geno = px.bar(
             geno_sex, 
@@ -158,7 +158,7 @@ with tab1:
         fig_geno.update_layout(**white_layout)
         st.plotly_chart(fig_geno, use_container_width=True)
 
-        # Таблица сводки генотипов (без учета пола)
+        # Table
         st.markdown("**Genotype Summary**")
         if not filtered_df.empty:
             geno_summary = filtered_df['Genotype'].value_counts(dropna=False).reset_index()
