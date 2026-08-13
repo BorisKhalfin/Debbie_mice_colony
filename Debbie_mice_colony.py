@@ -53,40 +53,48 @@ except Exception as e:
 # 3. Filters
 st.sidebar.title("🔍 Colony Filters")
 
-# Refresh button
+# Кнопка ручного обновления данных из Google Sheets
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
-# Genotype filter
+st.sidebar.divider()
+
+# Главная галочка: учитывать абсолютно всех мышей (игнорировать фильтры)
+include_all_mice = st.sidebar.checkbox("✅ Include ALL Mice (Ignore Filters)", value=False)
+
+# Дополнительный чекбокс для дат рождения (включать ли мышей с неизвестным DOB при фильтрации)
+include_unknown_dob = st.sidebar.checkbox("Include Unknown Birth Dates", value=True)
+
+st.sidebar.divider()
+
+# --- Фильтры (деактивируются визуально, если включена галочка "Include ALL Mice") ---
 all_genotypes = sorted([str(g) for g in df_raw['Genotype'].dropna().unique()]) if 'Genotype' in df_raw.columns else []
 selected_genotypes = st.sidebar.multiselect(
     "Genotype", 
     options=all_genotypes, 
-    default=all_genotypes
+    default=all_genotypes,
+    disabled=include_all_mice
 )
 
-# Sex filter
 all_sexes = sorted([str(s) for s in df_raw['Sex'].dropna().unique()]) if 'Sex' in df_raw.columns else []
 selected_sexes = st.sidebar.multiselect(
     "Sex", 
     options=all_sexes, 
-    default=all_sexes
+    default=all_sexes,
+    disabled=include_all_mice
 )
 
-# Cre filter
 all_cre = sorted(df_raw['Cre_status'].unique())
 selected_cre = st.sidebar.multiselect(
     "Cre Status", 
     options=all_cre, 
-    default=all_cre
+    default=all_cre,
+    disabled=include_all_mice
 )
 
 # DOB filter
 valid_dates = df_raw['Birth_date_clean'].dropna()
-
-include_unknown_dob = st.sidebar.checkbox("Include Unknown Birth Dates", value=True)
-
 if not valid_dates.empty:
     min_date = valid_dates.min().date()
     max_date = valid_dates.max().date()
@@ -95,65 +103,58 @@ if not valid_dates.empty:
         "Birth Date Range",
         value=(min_date, max_date),
         min_value=min_date,
-        max_value=max_date
+        max_value=max_date,
+        disabled=include_all_mice
     )
 else:
     date_range = None
 
-
-# Cage filter
 all_cages = sorted([str(c) for c in df_raw['Cage_ID'].dropna().unique()]) if 'Cage_ID' in df_raw.columns else []
 selected_cages = st.sidebar.multiselect(
     "Cage ID (Optional)", 
     options=all_cages, 
-    default=[]
+    default=[],
+    disabled=include_all_mice
 )
 
-# Parental filter
-search_tag = st.sidebar.text_input("Search Ear Tag / Parent ID", "").strip()
+search_tag = st.sidebar.text_input("Search Ear Tag / Parent ID", "", disabled=include_all_mice).strip()
 
 # 4. Filters applied
-filtered_df = df_raw.copy()
+if include_all_mice:
+    # Показываем абсолютно всех мышей без фильтрации
+    filtered_df = df_raw.copy()
+else:
+    filtered_df = df_raw.copy()
 
-if selected_genotypes and 'Genotype' in filtered_df.columns:
-    filtered_df = filtered_df[filtered_df['Genotype'].astype(str).isin(selected_genotypes)]
+    if selected_genotypes and 'Genotype' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['Genotype'].astype(str).isin(selected_genotypes)]
 
-if selected_sexes and 'Sex' in filtered_df.columns:
-    filtered_df = filtered_df[filtered_df['Sex'].astype(str).isin(selected_sexes)]
+    if selected_sexes and 'Sex' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['Sex'].astype(str).isin(selected_sexes)]
 
-if selected_cre:
-    filtered_df = filtered_df[filtered_df['Cre_status'].isin(selected_cre)]
+    if selected_cre:
+        filtered_df = filtered_df[filtered_df['Cre_status'].isin(selected_cre)]
 
-if isinstance(date_range, tuple) and len(date_range) == 2:
-    start_d, end_d = date_range
-    filtered_df = filtered_df[
-        (filtered_df['Birth_date_clean'].dt.date >= start_d) & 
-        (filtered_df['Birth_date_clean'].dt.date <= end_d)
-    ]
-
-if selected_cages and 'Cage_ID' in filtered_df.columns:
-    filtered_df = filtered_df[filtered_df['Cage_ID'].astype(str).isin(selected_cages)]
-
-if search_tag:
-    tag_match = filtered_df['Ear_Tag_str'].str.contains(search_tag, case=False, na=False) if 'Ear_Tag_str' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
-    father_match = filtered_df['Father'].astype(str).str.contains(search_tag, case=False, na=False) if 'Father' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
-    mother_match = filtered_df['Mother'].astype(str).str.contains(search_tag, case=False, na=False) if 'Mother' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
-    filtered_df = filtered_df[tag_match | father_match | mother_match]
-
-# update for D.O.B. correct control
-if isinstance(date_range, tuple) and len(date_range) == 2:
-    start_d, end_d = date_range
-    
-    date_mask = (
-        (filtered_df['Birth_date_clean'].dt.date >= start_d) & 
-        (filtered_df['Birth_date_clean'].dt.date <= end_d)
-    )
-    
-    if include_unknown_dob:
-        # Сохраняем и тех, у кого дата входит в диапазон, и тех, у кого дата не указана (NaT)
-        date_mask = date_mask | filtered_df['Birth_date_clean'].isna()
+    # Фильтрация по датам с учетом неопределенных дат (include_unknown_dob)
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_d, end_d = date_range
+        date_mask = (
+            (filtered_df['Birth_date_clean'].dt.date >= start_d) & 
+            (filtered_df['Birth_date_clean'].dt.date <= end_d)
+        )
+        if include_unknown_dob:
+            date_mask = date_mask | filtered_df['Birth_date_clean'].isna()
         
-    filtered_df = filtered_df[date_mask]
+        filtered_df = filtered_df[date_mask]
+
+    if selected_cages and 'Cage_ID' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['Cage_ID'].astype(str).isin(selected_cages)]
+
+    if search_tag:
+        tag_match = filtered_df['Ear_Tag_str'].str.contains(search_tag, case=False, na=False) if 'Ear_Tag_str' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
+        father_match = filtered_df['Father'].astype(str).str.contains(search_tag, case=False, na=False) if 'Father' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
+        mother_match = filtered_df['Mother'].astype(str).str.contains(search_tag, case=False, na=False) if 'Mother' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
+        filtered_df = filtered_df[tag_match | father_match | mother_match]
 
 # 5. Dashboard
 st.title("🐭 Debbie Mice Colony Analysis")
@@ -255,13 +256,11 @@ with tab2:
 with tab3:
     st.subheader("Filtered Colony Records")
     
-    # Columns
     display_cols = ['Ear_Tag', 'Genotype', 'Cre_status', 'Flox_1', 'Flox_2', 'Sex', 'Color', 'Birth_date', 'Cage_ID', 'Breeding_cage', 'Father', 'Mother']
     existing_cols = [c for c in display_cols if c in filtered_df.columns]
     
     st.dataframe(filtered_df[existing_cols], use_container_width=True)
     
-    # CSV Download
     csv_data = filtered_df[existing_cols].to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Download Filtered Data as CSV",
