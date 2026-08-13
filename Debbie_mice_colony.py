@@ -53,7 +53,7 @@ except Exception as e:
 # 3. Filters
 st.sidebar.title("🔍 Colony Filters")
 
-# Кнопка ручного обновления данных
+# Refresh button
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
@@ -84,6 +84,9 @@ selected_cre = st.sidebar.multiselect(
 
 # DOB filter
 valid_dates = df_raw['Birth_date_clean'].dropna()
+
+include_unknown_dob = st.sidebar.checkbox("Include Unknown Birth Dates", value=True)
+
 if not valid_dates.empty:
     min_date = valid_dates.min().date()
     max_date = valid_dates.max().date()
@@ -96,6 +99,7 @@ if not valid_dates.empty:
     )
 else:
     date_range = None
+
 
 # Cage filter
 all_cages = sorted([str(c) for c in df_raw['Cage_ID'].dropna().unique()]) if 'Cage_ID' in df_raw.columns else []
@@ -135,6 +139,21 @@ if search_tag:
     father_match = filtered_df['Father'].astype(str).str.contains(search_tag, case=False, na=False) if 'Father' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
     mother_match = filtered_df['Mother'].astype(str).str.contains(search_tag, case=False, na=False) if 'Mother' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
     filtered_df = filtered_df[tag_match | father_match | mother_match]
+
+# update for D.O.B. correct control
+if isinstance(date_range, tuple) and len(date_range) == 2:
+    start_d, end_d = date_range
+    
+    date_mask = (
+        (filtered_df['Birth_date_clean'].dt.date >= start_d) & 
+        (filtered_df['Birth_date_clean'].dt.date <= end_d)
+    )
+    
+    if include_unknown_dob:
+        # Сохраняем и тех, у кого дата входит в диапазон, и тех, у кого дата не указана (NaT)
+        date_mask = date_mask | filtered_df['Birth_date_clean'].isna()
+        
+    filtered_df = filtered_df[date_mask]
 
 # 5. Dashboard
 st.title("🐭 Debbie Mice Colony Analysis")
