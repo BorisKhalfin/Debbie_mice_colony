@@ -61,7 +61,7 @@ if st.sidebar.button("🔄 Refresh Data"):
 st.sidebar.divider()
 
 # Include ALL Mice and Ignore all Filters
-include_all_mice = st.sidebar.checkbox("✅ Include ALL Mice (Ignore Filters)", value=False)
+include_all_mice = st.sidebar.checkbox("Include ALL Mice (Ignore Filters)", value=False)
 
 # Unknown DOB display or ignore 
 include_unknown_dob = st.sidebar.checkbox("Include Unknown Birth Dates", value=True)
