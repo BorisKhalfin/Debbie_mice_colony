@@ -13,4 +13,4 @@ COPY Debbie_mice_colony.py .
 EXPOSE 8501
 
 # Running Streamlit
-CMD ["python", "-m", "streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["python", "-m", "streamlit", "run", "Debbie_mice_colony.py", "--server.port=8501", "--server.address=0.0.0.0"]
