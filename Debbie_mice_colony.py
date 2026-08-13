@@ -9,13 +9,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Cache
-@st.cache_data
+# 2. Cache & Data Loading from Google Sheets
+@st.cache_data(ttl=600)  # Автоматическое обновление кэша каждые 10 минут
 def load_data():
-    df = pd.read_excel('Debbie_mice_colony.xlsx', sheet_name='Main', engine='openpyxl')
+    sheet_url = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=1525111892"
+    df = pd.read_csv(sheet_url)
 
     # Datetime
-    df['Birth_date_clean'] = pd.to_datetime(df['Birth_date'], errors='coerce')
+    if 'Birth_date' in df.columns:
+        df['Birth_date_clean'] = pd.to_datetime(df['Birth_date'], errors='coerce')
+    else:
+        df['Birth_date_clean'] = pd.NaT
 
     # Color
     if 'Color' in df.columns:
@@ -24,26 +28,38 @@ def load_data():
     else:
         df['Color_clean'] = 'unspecified'
 
-    # Cre from boolean to +/-
-    df['Cre_status'] = df['Cre'].map({1.0: 'Cre+', 0.0: 'Cre-'}).fillna('Unknown')
+    # Cre status
+    if 'Cre' in df.columns:
+        cre_numeric = pd.to_numeric(df['Cre'], errors='coerce')
+        df['Cre_status'] = cre_numeric.map({1.0: 'Cre+', 0.0: 'Cre-'}).fillna('Unknown')
+    else:
+        df['Cre_status'] = 'Unknown'
 
     # Ear_Tag
-    df['Ear_Tag_str'] = df['Ear_Tag'].astype(str).str.replace('.0', '', regex=False)
+    if 'Ear_Tag' in df.columns:
+        df['Ear_Tag_str'] = df['Ear_Tag'].astype(str).str.replace('.0', '', regex=False)
+    else:
+        df['Ear_Tag_str'] = ''
 
     return df
 
 try:
     df_raw = load_data()
 except Exception as e:
-    st.error(f"File unavailable 'Debbie_mice_colony.xlsx': {e}")
+    st.error(f"Error loading data from Google Spreadsheet: {e}")
     st.stop()
 
 
 # 3. Filters
 st.sidebar.title("🔍 Colony Filters")
 
+# Кнопка ручного обновления данных
+if st.sidebar.button("🔄 Refresh Data"):
+    st.cache_data.clear()
+    st.rerun()
+
 # Genotype filter
-all_genotypes = sorted([str(g) for g in df_raw['Genotype'].dropna().unique()])
+all_genotypes = sorted([str(g) for g in df_raw['Genotype'].dropna().unique()]) if 'Genotype' in df_raw.columns else []
 selected_genotypes = st.sidebar.multiselect(
     "Genotype", 
     options=all_genotypes, 
@@ -51,7 +67,7 @@ selected_genotypes = st.sidebar.multiselect(
 )
 
 # Sex filter
-all_sexes = sorted([str(s) for s in df_raw['Sex'].dropna().unique()])
+all_sexes = sorted([str(s) for s in df_raw['Sex'].dropna().unique()]) if 'Sex' in df_raw.columns else []
 selected_sexes = st.sidebar.multiselect(
     "Sex", 
     options=all_sexes, 
@@ -68,18 +84,21 @@ selected_cre = st.sidebar.multiselect(
 
 # DOB filter
 valid_dates = df_raw['Birth_date_clean'].dropna()
-min_date = valid_dates.min().date()
-max_date = valid_dates.max().date()
+if not valid_dates.empty:
+    min_date = valid_dates.min().date()
+    max_date = valid_dates.max().date()
 
-date_range = st.sidebar.date_input(
-    "Birth Date Range",
-    value=(min_date, max_date),
-    min_value=min_date,
-    max_value=max_date
-)
+    date_range = st.sidebar.date_input(
+        "Birth Date Range",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date
+    )
+else:
+    date_range = None
 
 # Cage filter
-all_cages = sorted([str(c) for c in df_raw['Cage_ID'].dropna().unique()])
+all_cages = sorted([str(c) for c in df_raw['Cage_ID'].dropna().unique()]) if 'Cage_ID' in df_raw.columns else []
 selected_cages = st.sidebar.multiselect(
     "Cage ID (Optional)", 
     options=all_cages, 
@@ -92,10 +111,10 @@ search_tag = st.sidebar.text_input("Search Ear Tag / Parent ID", "").strip()
 # 4. Filters applied
 filtered_df = df_raw.copy()
 
-if selected_genotypes:
+if selected_genotypes and 'Genotype' in filtered_df.columns:
     filtered_df = filtered_df[filtered_df['Genotype'].astype(str).isin(selected_genotypes)]
 
-if selected_sexes:
+if selected_sexes and 'Sex' in filtered_df.columns:
     filtered_df = filtered_df[filtered_df['Sex'].astype(str).isin(selected_sexes)]
 
 if selected_cre:
@@ -108,25 +127,25 @@ if isinstance(date_range, tuple) and len(date_range) == 2:
         (filtered_df['Birth_date_clean'].dt.date <= end_d)
     ]
 
-if selected_cages:
+if selected_cages and 'Cage_ID' in filtered_df.columns:
     filtered_df = filtered_df[filtered_df['Cage_ID'].astype(str).isin(selected_cages)]
 
 if search_tag:
-    tag_match = filtered_df['Ear_Tag_str'].str.contains(search_tag, case=False, na=False)
-    father_match = filtered_df['Father'].astype(str).str.contains(search_tag, case=False, na=False)
-    mother_match = filtered_df['Mother'].astype(str).str.contains(search_tag, case=False, na=False)
+    tag_match = filtered_df['Ear_Tag_str'].str.contains(search_tag, case=False, na=False) if 'Ear_Tag_str' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
+    father_match = filtered_df['Father'].astype(str).str.contains(search_tag, case=False, na=False) if 'Father' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
+    mother_match = filtered_df['Mother'].astype(str).str.contains(search_tag, case=False, na=False) if 'Mother' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
     filtered_df = filtered_df[tag_match | father_match | mother_match]
 
 # 5. Dashboard
 st.title("🐭 Debbie Mice Colony Analysis")
 st.markdown("Interactive dashboard for analyzing colony structure, genotypes, and demographics.")
 
-# Key Metrics)
+# Key Metrics
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Mice (Filtered)", len(filtered_df))
-col2.metric("Unique Cages", filtered_df['Cage_ID'].nunique())
-col3.metric("Females (f)", len(filtered_df[filtered_df['Sex'] == 'f']))
-col4.metric("Males (m)", len(filtered_df[filtered_df['Sex'] == 'm']))
+col2.metric("Unique Cages", filtered_df['Cage_ID'].nunique() if 'Cage_ID' in filtered_df.columns else 0)
+col3.metric("Females (f)", len(filtered_df[filtered_df['Sex'] == 'f']) if 'Sex' in filtered_df.columns else 0)
+col4.metric("Males (m)", len(filtered_df[filtered_df['Sex'] == 'm']) if 'Sex' in filtered_df.columns else 0)
 
 st.divider()
 
@@ -146,22 +165,25 @@ with tab1:
     
     with col_g1:
         st.subheader("Mice Distribution by Genotype and Sex")
-        geno_sex = filtered_df.groupby(['Genotype', 'Sex']).size().reset_index(name='Count')
-        fig_geno = px.bar(
-            geno_sex, 
-            x='Genotype', 
-            y='Count', 
-            color='Sex',
-            barmode='group',
-            color_discrete_map={'f': '#4C72B0', 'm': '#55A868'},
-            title="Mice Count by Genotype and Sex"
-        )
-        fig_geno.update_layout(**white_layout)
-        st.plotly_chart(fig_geno, use_container_width=True)
+        if not filtered_df.empty and 'Genotype' in filtered_df.columns and 'Sex' in filtered_df.columns:
+            geno_sex = filtered_df.groupby(['Genotype', 'Sex']).size().reset_index(name='Count')
+            fig_geno = px.bar(
+                geno_sex, 
+                x='Genotype', 
+                y='Count', 
+                color='Sex',
+                barmode='group',
+                color_discrete_map={'f': '#4C72B0', 'm': '#55A868'},
+                title="Mice Count by Genotype and Sex"
+            )
+            fig_geno.update_layout(**white_layout)
+            st.plotly_chart(fig_geno, use_container_width=True)
+        else:
+            st.info("No data available to display Genotype distribution.")
 
         # Table
         st.markdown("**Genotype Summary**")
-        if not filtered_df.empty:
+        if not filtered_df.empty and 'Genotype' in filtered_df.columns:
             geno_summary = filtered_df['Genotype'].value_counts(dropna=False).reset_index()
             geno_summary.columns = ['Genotype', 'Count']
             
@@ -178,22 +200,23 @@ with tab1:
 
     with col_g2:
         st.subheader("Cre Status Ratio")
-        cre_counts = filtered_df['Cre_status'].value_counts().reset_index()
-        cre_counts.columns = ['Cre Status', 'Count']
-        fig_cre = px.pie(
-            cre_counts, 
-            names='Cre Status', 
-            values='Count',
-            color_discrete_sequence=['#C44E52', '#8172B2', '#CCB974'],
-            title="Cre+ vs Cre- Proportion"
-        )
-        fig_cre.update_layout(paper_bgcolor='white', font=dict(color='black'))
-        st.plotly_chart(fig_cre, use_container_width=True)
+        if not filtered_df.empty:
+            cre_counts = filtered_df['Cre_status'].value_counts().reset_index()
+            cre_counts.columns = ['Cre Status', 'Count']
+            fig_cre = px.pie(
+                cre_counts, 
+                names='Cre Status', 
+                values='Count',
+                color_discrete_sequence=['#C44E52', '#8172B2', '#CCB974'],
+                title="Cre+ vs Cre- Proportion"
+            )
+            fig_cre.update_layout(paper_bgcolor='white', font=dict(color='black'))
+            st.plotly_chart(fig_cre, use_container_width=True)
 
 with tab2:
     st.subheader("Births Over Time")
     birth_df = filtered_df.dropna(subset=['Birth_date_clean']).copy()
-    if not birth_df.empty:
+    if not birth_df.empty and 'Genotype' in birth_df.columns:
         birth_df['YearMonth'] = birth_df['Birth_date_clean'].dt.to_period('M').astype(str)
         timeline = birth_df.groupby(['YearMonth', 'Genotype']).size().reset_index(name='Count')
         
