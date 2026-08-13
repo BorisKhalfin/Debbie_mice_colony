@@ -53,22 +53,22 @@ except Exception as e:
 # 3. Filters
 st.sidebar.title("🔍 Colony Filters")
 
-# Кнопка ручного обновления данных из Google Sheets
+# Refresh data from Google Sheets
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
 st.sidebar.divider()
 
-# Главная галочка: учитывать абсолютно всех мышей (игнорировать фильтры)
+# Include ALL Mice and Ignore all Filters
 include_all_mice = st.sidebar.checkbox("✅ Include ALL Mice (Ignore Filters)", value=False)
 
-# Дополнительный чекбокс для дат рождения (включать ли мышей с неизвестным DOB при фильтрации)
+# Unknown DOB display or ignore 
 include_unknown_dob = st.sidebar.checkbox("Include Unknown Birth Dates", value=True)
 
 st.sidebar.divider()
 
-# --- Фильтры (деактивируются визуально, если включена галочка "Include ALL Mice") ---
+# Include ALL Mice and cancell all filters
 all_genotypes = sorted([str(g) for g in df_raw['Genotype'].dropna().unique()]) if 'Genotype' in df_raw.columns else []
 selected_genotypes = st.sidebar.multiselect(
     "Genotype", 
