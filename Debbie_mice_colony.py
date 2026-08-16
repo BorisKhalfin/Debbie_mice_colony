@@ -1,6 +1,36 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import time
+from PIL import Image
+
+# ---------------------------------------------------------
+# Splash Screen on start for 5 seconds
+# ---------------------------------------------------------
+if 'splash_shown' not in st.session_state:
+    st.session_state.splash_shown = False
+
+if not st.session_state.splash_shown:
+    # Spalsh screen container activated
+    splash = st.empty()
+    with splash.container():
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            try:
+                logo = Image.open("DTree.png")
+                st.image(logo, use_column_width=True)
+            except FileNotFoundError:
+                st.info("Loading Laboratory Dashboard...")
+            
+            st.markdown("<h3 style='text-align: center;'>Loading Laboratory Dashboard...</h3>", unsafe_allow_html=True)
+    
+    # Delay 5 seconds
+    time.sleep(5)
+    
+    # Reporting that the screen was shown to avoid loop
+    st.session_state.splash_shown = True
+    splash.empty()
+    st.rerun()
 
 # 1. Config
 st.set_page_config(
