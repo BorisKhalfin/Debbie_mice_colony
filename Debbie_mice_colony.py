@@ -32,6 +32,24 @@ if not st.session_state.splash_shown:
     splash.empty()
     st.rerun()
 
+# Sidebar logo and link to the website
+try:
+    st.sidebar.markdown(
+        f"""
+        <div style="text-align: center; margin-bottom: 15px;">
+            <a href="https://toiber.wixsite.com/toiber-lab" target="_blank" title="Visit Toiber Lab Website">
+                <img src="https://raw.githubusercontent.com/streamlit/streamlit/main/docs/static/logo.png" id="lab_logo_img" style="display:none;"/>
+            </a>
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    st.sidebar.image("DTree.png", width=120)
+    st.sidebar.link_button("🌐 Toiber Lab Website", "https://toiber.wixsite.com/toiber-lab")
+except Exception:
+    pass
+
+
 # 1. Config
 st.set_page_config(
     page_title="Debbie Mice Colony Dashboard",
