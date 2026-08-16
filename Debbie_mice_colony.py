@@ -18,7 +18,7 @@ if not st.session_state.splash_shown:
         with col2:
             try:
                 logo = Image.open("DTree.png")
-                st.image(logo, use_column_width=True)
+                st.image(logo, use_container_width=True)
             except FileNotFoundError:
                 st.info("Loading Laboratory Dashboard...")
             
