@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # 2. Cache & Data Loading from Google Sheets
-@st.cache_data(ttl=600)  # Автоматическое обновление кэша каждые 10 минут
+@st.cache_data(ttl=600)  # Check for updates every 10 minutes
 def load_data():
     sheet_url = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=1525111892"
     df = pd.read_csv(sheet_url)
@@ -121,7 +121,7 @@ search_tag = st.sidebar.text_input("Search Ear Tag / Parent ID", "", disabled=in
 
 # 4. Filters applied
 if include_all_mice:
-    # Показываем абсолютно всех мышей без фильтрации
+    # All tails together even if some data missing
     filtered_df = df_raw.copy()
 else:
     filtered_df = df_raw.copy()
@@ -135,7 +135,7 @@ else:
     if selected_cre:
         filtered_df = filtered_df[filtered_df['Cre_status'].isin(selected_cre)]
 
-    # Фильтрация по датам с учетом неопределенных дат (include_unknown_dob)
+    # All DOB, include unknown ones
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_d, end_d = date_range
         date_mask = (
