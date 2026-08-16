@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Taking the code
 COPY Debbie_mice_colony.py .
+COPY DTree.png .
 
 # Opening port for Streamlit
 EXPOSE 8501
