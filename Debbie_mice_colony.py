@@ -158,16 +158,60 @@ if 'Age_M_num' in df_raw.columns and not df_raw['Age_M_num'].dropna().empty:
 else:
     age_range = None
 
-# --- FILTER 2: Cre Status ---
-all_cre = sorted(df_raw['Cre_status'].unique())
-selected_cre = st.sidebar.multiselect(
-    "Cre Status", 
-    options=all_cre, 
-    default=all_cre,
-    disabled=include_all_mice
-)
+# Datetime
+    if 'Birth_date' in df.columns:
+        df['Birth_date_clean'] = pd.to_datetime(df['Birth_date'], errors='coerce')
+    else:
+        df['Birth_date_clean'] = pd.NaT
 
-# --- FILTER 3: Genotype ---
+    # Color
+    if 'Color' in df.columns:
+        df['Color_clean'] = df['Color'].astype(str).str.strip().str.lower()
+        df['Color_clean'] = df['Color_clean'].replace({'nan': 'unspecified', '?': 'unspecified'})
+    else:
+        df['Color_clean'] = 'unspecified'
+
+    # Cre status
+    if 'Cre' in df.columns:
+        cre_numeric = pd.to_numeric(df['Cre'], errors='coerce')
+        df['Cre_status'] = cre_numeric.map({1.0: 'Cre+', 0.0: 'Cre-'}).fillna('Unknown')
+    else:
+        df['Cre_status'] = 'Unknown'
+
+    # Ear_Tag
+    if 'Ear_Tag' in df.columns:
+        df['Ear_Tag_str'] = df['Ear_Tag'].astype(str).str.replace('.0', '', regex=False)
+    else:
+        df['Ear_Tag_str'] = ''
+
+    return df
+
+try:
+    df_raw = load_data()
+except Exception as e:
+    st.error(f"Error loading data from Google Spreadsheet: {e}")
+    st.stop()
+
+
+# 3. Filters
+st.sidebar.title("🔍 Colony Filters")
+
+# Refresh data from Google Sheets
+if st.sidebar.button("🔄 Refresh Data"):
+    st.cache_data.clear()
+    st.rerun()
+
+st.sidebar.divider()
+
+# Include ALL Mice and Ignore all Filters
+include_all_mice = st.sidebar.checkbox("Include ALL Mice (Ignore Filters)", value=False)
+
+# Unknown DOB display or ignore 
+include_unknown_dob = st.sidebar.checkbox("Include Unknown Birth Dates", value=True)
+
+st.sidebar.divider()
+
+# Include ALL Mice and cancell all filters
 all_genotypes = sorted([str(g) for g in df_raw['Genotype'].dropna().unique()]) if 'Genotype' in df_raw.columns else []
 selected_genotypes = st.sidebar.multiselect(
     "Genotype", 
@@ -176,7 +220,6 @@ selected_genotypes = st.sidebar.multiselect(
     disabled=include_all_mice
 )
 
-# --- FILTER 4: Sex ---
 all_sexes = sorted([str(s) for s in df_raw['Sex'].dropna().unique()]) if 'Sex' in df_raw.columns else []
 selected_sexes = st.sidebar.multiselect(
     "Sex", 
@@ -185,51 +228,80 @@ selected_sexes = st.sidebar.multiselect(
     disabled=include_all_mice
 )
 
-# --- FILTER 5: Color ---
-all_colors = sorted([str(c) for c in df_raw['Color'].dropna().unique()]) if 'Color' in df_raw.columns else []
-selected_colors = st.sidebar.multiselect(
-    "Color", 
-    options=all_colors, 
-    default=all_colors,
+all_cre = sorted(df_raw['Cre_status'].unique())
+selected_cre = st.sidebar.multiselect(
+    "Cre Status", 
+    options=all_cre, 
+    default=all_cre,
     disabled=include_all_mice
 )
 
+# DOB filter
+valid_dates = df_raw['Birth_date_clean'].dropna()
+if not valid_dates.empty:
+    min_date = valid_dates.min().date()
+    max_date = valid_dates.max().date()
 
-# 5. Apply Filters
+    date_range = st.sidebar.date_input(
+        "Birth Date Range",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        disabled=include_all_mice
+    )
+else:
+    date_range = None
+
+all_cages = sorted([str(c) for c in df_raw['Cage_ID'].dropna().unique()]) if 'Cage_ID' in df_raw.columns else []
+selected_cages = st.sidebar.multiselect(
+    "Cage ID (Optional)", 
+    options=all_cages, 
+    default=[],
+    disabled=include_all_mice
+)
+
+search_tag = st.sidebar.text_input("Search Ear Tag / Parent ID", "", disabled=include_all_mice).strip()
+
+# 4. Filters applied
 if include_all_mice:
+    # All tails together even if some data missing
     filtered_df = df_raw.copy()
 else:
     filtered_df = df_raw.copy()
 
-    # Filter Age_M
-    if age_range and 'Age_M_num' in filtered_df.columns:
-        filtered_df = filtered_df[
-            (filtered_df['Age_M_num'] >= age_range[0]) & 
-            (filtered_df['Age_M_num'] <= age_range[1]) | 
-            (filtered_df['Age_M_num'].isna())
-        ]
-
-    # Filter Cre
-    if selected_cre:
-        filtered_df = filtered_df[filtered_df['Cre_status'].isin(selected_cre)]
-
-    # Filter Genotype
     if selected_genotypes and 'Genotype' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['Genotype'].astype(str).isin(selected_genotypes)]
 
-    # Filter Sex
     if selected_sexes and 'Sex' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['Sex'].astype(str).isin(selected_sexes)]
 
-    # Filter Color
-    if selected_colors and 'Color' in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df['Color'].astype(str).isin(selected_colors)]
+    if selected_cre:
+        filtered_df = filtered_df[filtered_df['Cre_status'].isin(selected_cre)]
 
+    # All DOB, include unknown ones
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        start_d, end_d = date_range
+        date_mask = (
+            (filtered_df['Birth_date_clean'].dt.date >= start_d) & 
+            (filtered_df['Birth_date_clean'].dt.date <= end_d)
+        )
+        if include_unknown_dob:
+            date_mask = date_mask | filtered_df['Birth_date_clean'].isna()
+        
+        filtered_df = filtered_df[date_mask]
 
-# 6. Dashboard Section
-title_prefix = "Live Mice" if selected_source == "Live Mice Sheet 🐭" else "Debbie Mice Colony"
-st.title(f"🐭 {title_prefix} Analysis")
-st.markdown(f"Interactive dashboard for analyzing colony structure and demographics (**{selected_source}**).")
+    if selected_cages and 'Cage_ID' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['Cage_ID'].astype(str).isin(selected_cages)]
+
+    if search_tag:
+        tag_match = filtered_df['Ear_Tag_str'].str.contains(search_tag, case=False, na=False) if 'Ear_Tag_str' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
+        father_match = filtered_df['Father'].astype(str).str.contains(search_tag, case=False, na=False) if 'Father' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
+        mother_match = filtered_df['Mother'].astype(str).str.contains(search_tag, case=False, na=False) if 'Mother' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
+        filtered_df = filtered_df[tag_match | father_match | mother_match]
+
+# 5. Dashboard
+st.title("🐭 Debbie Mice Colony Analysis")
+st.markdown("Interactive dashboard for analyzing colony structure, genotypes, and demographics.")
 
 # Key Metrics
 col1, col2, col3, col4 = st.columns(4)
@@ -240,7 +312,7 @@ col4.metric("Males (m)", len(filtered_df[filtered_df['Sex'] == 'm']) if 'Sex' in
 
 st.divider()
 
-# Graphs & Tabs
+# Graphs
 tab1, tab2, tab3 = st.tabs(["📊 Genotypes & Demographics", "📈 Birth Dynamics", "📋 Raw Data"])
 
 white_layout = dict(
@@ -272,6 +344,7 @@ with tab1:
         else:
             st.info("No data available to display Genotype distribution.")
 
+        # Table
         st.markdown("**Genotype Summary**")
         if not filtered_df.empty and 'Genotype' in filtered_df.columns:
             geno_summary = filtered_df['Genotype'].value_counts(dropna=False).reset_index()
@@ -280,7 +353,11 @@ with tab1:
             total_mice = len(filtered_df)
             geno_summary['Percentage'] = (geno_summary['Count'] / total_mice * 100).map("{:.1f}%".format)
             
-            st.dataframe(geno_summary, use_container_width=True, hide_index=True)
+            st.dataframe(
+                geno_summary,
+                use_container_width=True,
+                hide_index=True
+            )
         else:
             st.info("No data available for the selected filters.")
 
@@ -322,7 +399,7 @@ with tab2:
 with tab3:
     st.subheader("Filtered Colony Records")
     
-    display_cols = ['Ear_Tag', 'Age_M', 'Genotype', 'Cre_status', 'Sex', 'Color', 'Birth_date', 'Cage_ID', 'Destiny']
+    display_cols = ['Ear_Tag', 'Genotype', 'Cre_status', 'Flox_1', 'Flox_2', 'Sex', 'Color', 'Birth_date', 'Cage_ID', 'Breeding_cage', 'Father', 'Mother']
     existing_cols = [c for c in display_cols if c in filtered_df.columns]
     
     st.dataframe(filtered_df[existing_cols], use_container_width=True)
