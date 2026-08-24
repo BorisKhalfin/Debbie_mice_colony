@@ -101,10 +101,10 @@ def load_data(sheet_url: str):
 
 
 # 3. Sidebar - Source Selection
-st.sidebar.title("📊 Data Source")
+st.sidebar.title("📊 Data for Panda")
 
 selected_source = st.sidebar.radio(
-    "Select Sheet:",
+    "Select mice to see and analyze:",
     options=["Laid upon the altar of science", "At our service 🐭"],
     index=0
 )
