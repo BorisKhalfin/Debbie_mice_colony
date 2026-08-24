@@ -11,6 +11,7 @@ if 'splash_shown' not in st.session_state:
     st.session_state.splash_shown = False
 
 if not st.session_state.splash_shown:
+    # Spalsh screen container activated
     splash = st.empty()
     with splash.container():
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -23,7 +24,10 @@ if not st.session_state.splash_shown:
             
             st.markdown("<h3 style='text-align: center;'>Loading Laboratory Dashboard...</h3>", unsafe_allow_html=True)
     
+    # Delay 5 seconds
     time.sleep(5)
+    
+    # Reporting that the screen was shown to avoid loop
     st.session_state.splash_shown = True
     splash.empty()
     st.rerun()
@@ -53,113 +57,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Cache & Data Loading
-URL_ALL_MICE = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=1525111892"
-URL_LIVE_MICE = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=2128634233"
-
-@st.cache_data(ttl=600)
-def load_data(sheet_url: str):
+# 2. Cache & Data Loading from Google Sheets
+@st.cache_data(ttl=600)  # Check for updates every 10 minutes
+def load_data():
+    sheet_url = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=1525111892"
     df = pd.read_csv(sheet_url)
 
-    # Standardization for column names between sheets
-    rename_dict = {}
-    if 'Age, M' in df.columns:
-        rename_dict['Age, M'] = 'Age_M'
-    if 'cre' in df.columns:
-        rename_dict['cre'] = 'Cre'
-    if 'ID' in df.columns and 'Ear_Tag' not in df.columns:
-        rename_dict['ID'] = 'Ear_Tag'
-    if 'Cage' in df.columns and 'Cage_ID' not in df.columns:
-        rename_dict['Cage'] = 'Cage_ID'
-    
-    if rename_dict:
-        df = df.rename(columns=rename_dict)
-
     # Datetime
-    if 'Birth_date' in df.columns:
-        df['Birth_date_clean'] = pd.to_datetime(df['Birth_date'], errors='coerce')
-    else:
-        df['Birth_date_clean'] = pd.NaT
-
-    # Color
-    if 'Color' in df.columns:
-        df['Color_clean'] = df['Color'].astype(str).str.strip().str.lower()
-        df['Color_clean'] = df['Color_clean'].replace({'nan': 'unspecified', '?': 'unspecified'})
-    else:
-        df['Color_clean'] = 'unspecified'
-
-    # Age_M numeric processing
-    if 'Age_M' in df.columns:
-        df['Age_M_num'] = pd.to_numeric(df['Age_M'], errors='coerce')
-    else:
-        df['Age_M_num'] = None
-
-    # Cre status
-    if 'Cre' in df.columns:
-        cre_col = df['Cre'].astype(str).str.strip().str.upper()
-        df['Cre_status'] = cre_col.map({
-            '1.0': 'Cre+', '1': 'Cre+', 'TRUE': 'Cre+',
-            '0.0': 'Cre-', '0': 'Cre-', 'FALSE': 'Cre-'
-        }).fillna('Unknown')
-    else:
-        df['Cre_status'] = 'Unknown'
-
-    # Ear_Tag string
-    if 'Ear_Tag' in df.columns:
-        df['Ear_Tag_str'] = df['Ear_Tag'].astype(str).str.replace('.0', '', regex=False)
-    else:
-        df['Ear_Tag_str'] = ''
-
-    return df
-
-
-# 3. Data Source Selection
-st.sidebar.title("📊 Data Source")
-
-selected_source = st.sidebar.radio(
-    "Select Sheet:",
-    options=["Main Colony Sheet", "Live Mice Sheet 🐭"],
-    index=0
-)
-
-current_url = URL_LIVE_MICE if selected_source == "Live Mice Sheet 🐭" else URL_ALL_MICE
-
-try:
-    df_raw = load_data(current_url)
-except Exception as e:
-    st.error(f"Error loading data from Google Spreadsheet: {e}")
-    st.stop()
-
-
-# 4. Filters Section
-st.sidebar.title("🔍 Colony Filters")
-
-if st.sidebar.button("🔄 Refresh Data"):
-    st.cache_data.clear()
-    st.rerun()
-
-st.sidebar.divider()
-
-include_all_mice = st.sidebar.checkbox("Include ALL Mice (Ignore Filters)", value=False)
-
-st.sidebar.divider()
-
-# --- FILTER 1: Age_M Range ---
-df = pd.read_csv(current_url)
-if 'Age_M_num' in df_raw.columns and not df_raw['Age_M_num'].dropna().empty:
-    min_age = int(df_raw['Age_M_num'].min())
-    max_age = int(df_raw['Age_M_num'].max())
-    age_range = st.sidebar.slider(
-        "Age_M (Months)",
-        min_value=min_age,
-        max_value=max_age,
-        value=(min_age, max_age),
-        disabled=include_all_mice
-    )
-else:
-    age_range = None
-
-# Datetime
     if 'Birth_date' in df.columns:
         df['Birth_date_clean'] = pd.to_datetime(df['Birth_date'], errors='coerce')
     else:
@@ -185,7 +89,7 @@ else:
     else:
         df['Ear_Tag_str'] = ''
 
-return df
+    return df
 
 try:
     df_raw = load_data()
