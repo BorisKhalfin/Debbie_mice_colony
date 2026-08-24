@@ -105,11 +105,11 @@ st.sidebar.title("📊 Data Source")
 
 selected_source = st.sidebar.radio(
     "Select Sheet:",
-    options=["Main Colony Sheet", "Live Mice Sheet 🐭"],
+    options=["Laid upon the altar of science", "At our service 🐭"],
     index=0
 )
 
-current_url = URL_LIVE_MICE if selected_source == "Live Mice Sheet 🐭" else URL_ALL_MICE
+current_url = URL_LIVE_MICE if selected_source == "At our service 🐭" else URL_ALL_MICE
 
 try:
     df_raw = load_data(current_url)
