@@ -11,7 +11,6 @@ if 'splash_shown' not in st.session_state:
     st.session_state.splash_shown = False
 
 if not st.session_state.splash_shown:
-    # Spalsh screen container activated
     splash = st.empty()
     with splash.container():
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -24,10 +23,7 @@ if not st.session_state.splash_shown:
             
             st.markdown("<h3 style='text-align: center;'>Loading Laboratory Dashboard...</h3>", unsafe_allow_html=True)
     
-    # Delay 5 seconds
     time.sleep(5)
-    
-    # Reporting that the screen was shown to avoid loop
     st.session_state.splash_shown = True
     splash.empty()
     st.rerun()
@@ -58,9 +54,11 @@ st.set_page_config(
 )
 
 # 2. Cache & Data Loading from Google Sheets
+URL_ALL_MICE = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=1525111892"
+URL_LIVE_MICE = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=2128634233"
+
 @st.cache_data(ttl=600)  # Check for updates every 10 minutes
-def load_data():
-    sheet_url = "https://docs.google.com/spreadsheets/d/1Eco6HKJJjpK4Q7RJ407bm-rS1TCjGWKdiA33f5jMUC0/export?format=csv&gid=1525111892"
+def load_data(sheet_url: str):
     df = pd.read_csv(sheet_url)
 
     # Datetime
@@ -78,30 +76,51 @@ def load_data():
 
     # Cre status
     if 'Cre' in df.columns:
-        cre_numeric = pd.to_numeric(df['Cre'], errors='coerce')
-        df['Cre_status'] = cre_numeric.map({1.0: 'Cre+', 0.0: 'Cre-'}).fillna('Unknown')
+        cre_col = df['Cre'].astype(str).str.strip().str.upper()
+        df['Cre_status'] = cre_col.map({'1.0': 'Cre+', '1': 'Cre+', 'TRUE': 'Cre+', '0.0': 'Cre-', '0': 'Cre-', 'FALSE': 'Cre-'}).fillna('Unknown')
+    elif 'cre' in df.columns:
+        cre_col = df['cre'].astype(str).str.strip().str.upper()
+        df['Cre_status'] = cre_col.map({'1.0': 'Cre+', '1': 'Cre+', 'TRUE': 'Cre+', '0.0': 'Cre-', '0': 'Cre-', 'FALSE': 'Cre-'}).fillna('Unknown')
     else:
         df['Cre_status'] = 'Unknown'
 
-    # Ear_Tag
+    # Ear_Tag / ID
     if 'Ear_Tag' in df.columns:
         df['Ear_Tag_str'] = df['Ear_Tag'].astype(str).str.replace('.0', '', regex=False)
+    elif 'ID' in df.columns:
+        df['Ear_Tag_str'] = df['ID'].astype(str).str.replace('.0', '', regex=False)
+        df['Ear_Tag'] = df['ID']
     else:
         df['Ear_Tag_str'] = ''
 
+    # Cage mapping fallback
+    if 'Cage' in df.columns and 'Cage_ID' not in df.columns:
+        df['Cage_ID'] = df['Cage']
+
     return df
 
+
+# 3. Sidebar - Source Selection
+st.sidebar.title("📊 Data Source")
+
+selected_source = st.sidebar.radio(
+    "Select Sheet:",
+    options=["Main Colony Sheet", "Live Mice Sheet 🐭"],
+    index=0
+)
+
+current_url = URL_LIVE_MICE if selected_source == "Live Mice Sheet 🐭" else URL_ALL_MICE
+
 try:
-    df_raw = load_data()
+    df_raw = load_data(current_url)
 except Exception as e:
     st.error(f"Error loading data from Google Spreadsheet: {e}")
     st.stop()
 
 
-# 3. Filters
+# 4. Original Sidebar Filters (Restored 100%)
 st.sidebar.title("🔍 Colony Filters")
 
-# Refresh data from Google Sheets
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
@@ -116,7 +135,7 @@ include_unknown_dob = st.sidebar.checkbox("Include Unknown Birth Dates", value=T
 
 st.sidebar.divider()
 
-# Include ALL Mice and cancell all filters
+# Genotype
 all_genotypes = sorted([str(g) for g in df_raw['Genotype'].dropna().unique()]) if 'Genotype' in df_raw.columns else []
 selected_genotypes = st.sidebar.multiselect(
     "Genotype", 
@@ -125,6 +144,7 @@ selected_genotypes = st.sidebar.multiselect(
     disabled=include_all_mice
 )
 
+# Sex
 all_sexes = sorted([str(s) for s in df_raw['Sex'].dropna().unique()]) if 'Sex' in df_raw.columns else []
 selected_sexes = st.sidebar.multiselect(
     "Sex", 
@@ -133,6 +153,7 @@ selected_sexes = st.sidebar.multiselect(
     disabled=include_all_mice
 )
 
+# Cre
 all_cre = sorted(df_raw['Cre_status'].unique())
 selected_cre = st.sidebar.multiselect(
     "Cre Status", 
@@ -157,7 +178,9 @@ if not valid_dates.empty:
 else:
     date_range = None
 
-all_cages = sorted([str(c) for c in df_raw['Cage_ID'].dropna().unique()]) if 'Cage_ID' in df_raw.columns else []
+# Cage
+cage_col = 'Cage_ID' if 'Cage_ID' in df_raw.columns else ('Cage' if 'Cage' in df_raw.columns else None)
+all_cages = sorted([str(c) for c in df_raw[cage_col].dropna().unique()]) if cage_col else []
 selected_cages = st.sidebar.multiselect(
     "Cage ID (Optional)", 
     options=all_cages, 
@@ -167,9 +190,8 @@ selected_cages = st.sidebar.multiselect(
 
 search_tag = st.sidebar.text_input("Search Ear Tag / Parent ID", "", disabled=include_all_mice).strip()
 
-# 4. Filters applied
+# 5. Apply Original Filters Logic
 if include_all_mice:
-    # All tails together even if some data missing
     filtered_df = df_raw.copy()
 else:
     filtered_df = df_raw.copy()
@@ -195,23 +217,26 @@ else:
         
         filtered_df = filtered_df[date_mask]
 
-    if selected_cages and 'Cage_ID' in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df['Cage_ID'].astype(str).isin(selected_cages)]
+    if selected_cages and cage_col:
+        filtered_df = filtered_df[filtered_df[cage_col].astype(str).isin(selected_cages)]
 
     if search_tag:
         tag_match = filtered_df['Ear_Tag_str'].str.contains(search_tag, case=False, na=False) if 'Ear_Tag_str' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
         father_match = filtered_df['Father'].astype(str).str.contains(search_tag, case=False, na=False) if 'Father' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
         mother_match = filtered_df['Mother'].astype(str).str.contains(search_tag, case=False, na=False) if 'Mother' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
-        filtered_df = filtered_df[tag_match | father_match | mother_match]
+        parents_match = filtered_df['Parents'].astype(str).str.contains(search_tag, case=False, na=False) if 'Parents' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
+        filtered_df = filtered_df[tag_match | father_match | mother_match | parents_match]
 
-# 5. Dashboard
-st.title("🐭 Debbie Mice Colony Analysis")
-st.markdown("Interactive dashboard for analyzing colony structure, genotypes, and demographics.")
+# 6. Dashboard Render
+title_prefix = "Live Mice" if selected_source == "Live Mice Sheet 🐭" else "Debbie Mice Colony"
+st.title(f"🐭 {title_prefix} Analysis")
+st.markdown(f"Interactive dashboard for analyzing colony structure, genotypes, and demographics (**{selected_source}**).")
 
 # Key Metrics
+cage_count_col = 'Cage_ID' if 'Cage_ID' in filtered_df.columns else ('Cage' if 'Cage' in filtered_df.columns else None)
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Mice (Filtered)", len(filtered_df))
-col2.metric("Unique Cages", filtered_df['Cage_ID'].nunique() if 'Cage_ID' in filtered_df.columns else 0)
+col2.metric("Unique Cages", filtered_df[cage_count_col].nunique() if cage_count_col else 0)
 col3.metric("Females (f)", len(filtered_df[filtered_df['Sex'] == 'f']) if 'Sex' in filtered_df.columns else 0)
 col4.metric("Males (m)", len(filtered_df[filtered_df['Sex'] == 'm']) if 'Sex' in filtered_df.columns else 0)
 
@@ -304,7 +329,7 @@ with tab2:
 with tab3:
     st.subheader("Filtered Colony Records")
     
-    display_cols = ['Ear_Tag', 'Genotype', 'Cre_status', 'Flox_1', 'Flox_2', 'Sex', 'Color', 'Birth_date', 'Cage_ID', 'Breeding_cage', 'Father', 'Mother']
+    display_cols = ['Ear_Tag', 'ID', 'Genotype', 'Cre_status', 'Flox_1', 'Flox_2', 'Floxlox allel 1', 'Floxlox allel 2', 'Sex', 'Color', 'Birth_date', 'Cage_ID', 'Cage', 'Breeding_cage', 'Father', 'Mother', 'Parents', 'Destiny']
     existing_cols = [c for c in display_cols if c in filtered_df.columns]
     
     st.dataframe(filtered_df[existing_cols], use_container_width=True)
