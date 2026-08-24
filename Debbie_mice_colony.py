@@ -145,6 +145,7 @@ include_all_mice = st.sidebar.checkbox("Include ALL Mice (Ignore Filters)", valu
 st.sidebar.divider()
 
 # --- FILTER 1: Age_M Range ---
+df = pd.read_csv(current_url)
 if 'Age_M_num' in df_raw.columns and not df_raw['Age_M_num'].dropna().empty:
     min_age = int(df_raw['Age_M_num'].min())
     max_age = int(df_raw['Age_M_num'].max())
@@ -184,7 +185,7 @@ else:
     else:
         df['Ear_Tag_str'] = ''
 
-    return df
+return df
 
 try:
     df_raw = load_data()
