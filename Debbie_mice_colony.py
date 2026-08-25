@@ -133,7 +133,9 @@ except Exception as e:
     st.stop()
 
 
-# 4. Sidebar Filters
+# ---------------------------------------------------------
+# 4. Sidebar Filters (Fixed default to include ALL 1555 mice)
+# ---------------------------------------------------------
 st.sidebar.title("🔍 Colony Filters")
 
 if st.sidebar.button("🔄 Refresh Data"):
@@ -142,18 +144,13 @@ if st.sidebar.button("🔄 Refresh Data"):
 
 st.sidebar.divider()
 
-# Include ALL Mice and Ignore all Filters
+# Include ALL Mice override
 include_all_mice = st.sidebar.checkbox("Include ALL Mice (Ignore Filters)", value=False)
-
-# Additional options for non-experimental sheets
-if selected_source != "Experiments 2026-2027":
-    include_unknown_dob = st.sidebar.checkbox("Include Unknown Birth Dates", value=True)
-else:
-    include_unknown_dob = True
+include_unknown_dob = st.sidebar.checkbox("Include Unknown Birth Dates", value=True)
 
 st.sidebar.divider()
 
-# Genotype
+# Genotype Filter
 all_genotypes = sorted([str(g) for g in df_raw['Genotype'].dropna().unique()]) if 'Genotype' in df_raw.columns else []
 selected_genotypes = st.sidebar.multiselect(
     "Genotype", 
@@ -162,7 +159,7 @@ selected_genotypes = st.sidebar.multiselect(
     disabled=include_all_mice
 )
 
-# Sex
+# Sex Filter
 all_sexes = sorted([str(s) for s in df_raw['Sex'].dropna().unique()]) if 'Sex' in df_raw.columns else []
 selected_sexes = st.sidebar.multiselect(
     "Sex", 
@@ -171,7 +168,7 @@ selected_sexes = st.sidebar.multiselect(
     disabled=include_all_mice
 )
 
-# Cre
+# Cre Filter
 all_cre = sorted(df_raw['Cre_status'].unique())
 selected_cre = st.sidebar.multiselect(
     "Cre Status", 
@@ -180,7 +177,7 @@ selected_cre = st.sidebar.multiselect(
     disabled=include_all_mice
 )
 
-# Color Filter (especially relevant for Experimental Mice)
+# Color Filter (if present)
 if 'Color' in df_raw.columns:
     all_colors = sorted([str(c) for c in df_raw['Color'].dropna().unique()])
     selected_colors = st.sidebar.multiselect(
@@ -190,40 +187,36 @@ if 'Color' in df_raw.columns:
         disabled=include_all_mice
     )
 else:
-    selected_colors = []
+    all_colors, selected_colors = [], []
 
-# Destiny Filter for Experiments
+# Destiny Filter (if present)
 if 'Destiny' in df_raw.columns:
     all_destinies = sorted([str(d) for d in df_raw['Destiny'].dropna().unique()])
     selected_destinies = st.sidebar.multiselect(
-        "Destiny (Experiment)", 
+        "Destiny", 
         options=all_destinies, 
         default=all_destinies,
         disabled=include_all_mice
     )
 else:
-    selected_destinies = []
+    all_destinies, selected_destinies = [], []
 
-# DOB filter (Main/Live)
-if selected_source != "Experiments 2026-2027":
-    valid_dates = df_raw['Birth_date_clean'].dropna()
-    if not valid_dates.empty:
-        min_date = valid_dates.min().date()
-        max_date = valid_dates.max().date()
-
-        date_range = st.sidebar.date_input(
-            "Birth Date Range",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-            disabled=include_all_mice
-        )
-    else:
-        date_range = None
+# DOB Filter
+valid_dates = df_raw['Birth_date_clean'].dropna()
+if not valid_dates.empty and selected_source != "Experimental Mice 🧪":
+    min_date = valid_dates.min().date()
+    max_date = valid_dates.max().date()
+    date_range = st.sidebar.date_input(
+        "Birth Date Range",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        disabled=include_all_mice
+    )
 else:
     date_range = None
 
-# Cage
+# Cage Filter
 cage_col = 'Cage_ID' if 'Cage_ID' in df_raw.columns else ('Cage' if 'Cage' in df_raw.columns else None)
 all_cages = sorted([str(c) for c in df_raw[cage_col].dropna().unique()]) if cage_col else []
 selected_cages = st.sidebar.multiselect(
@@ -235,28 +228,41 @@ selected_cages = st.sidebar.multiselect(
 
 search_tag = st.sidebar.text_input("Search Ear Tag / Parent ID", "", disabled=include_all_mice).strip()
 
-# 5. Apply Filters Logic
-if include_all_mice:
-    filtered_df = df_raw.copy()
-else:
-    filtered_df = df_raw.copy()
+# ---------------------------------------------------------
+# 5. Apply Filters (Preserves NaNs & full dataset by default)
+# ---------------------------------------------------------
+filtered_df = df_raw.copy()
 
-    if selected_genotypes and 'Genotype' in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df['Genotype'].astype(str).isin(selected_genotypes)]
+if not include_all_mice:
+    # Filter Genotype ONLY if user deselected something
+    if 'Genotype' in filtered_df.columns and len(selected_genotypes) < len(all_genotypes):
+        filtered_df = filtered_df[
+            filtered_df['Genotype'].astype(str).isin(selected_genotypes) | filtered_df['Genotype'].isna()
+        ]
 
-    if selected_sexes and 'Sex' in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df['Sex'].astype(str).isin(selected_sexes)]
+    # Filter Sex ONLY if user deselected something
+    if 'Sex' in filtered_df.columns and len(selected_sexes) < len(all_sexes):
+        filtered_df = filtered_df[
+            filtered_df['Sex'].astype(str).isin(selected_sexes) | filtered_df['Sex'].isna()
+        ]
 
-    if selected_cre:
+    # Filter Cre ONLY if user deselected something
+    if len(selected_cre) < len(all_cre):
         filtered_df = filtered_df[filtered_df['Cre_status'].isin(selected_cre)]
 
-    if selected_colors and 'Color' in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df['Color'].astype(str).isin(selected_colors)]
+    # Filter Color ONLY if user deselected something
+    if 'Color' in filtered_df.columns and len(selected_colors) < len(all_colors):
+        filtered_df = filtered_df[
+            filtered_df['Color'].astype(str).isin(selected_colors) | filtered_df['Color'].isna()
+        ]
 
-    if selected_destinies and 'Destiny' in filtered_df.columns:
-        filtered_df = filtered_df[filtered_df['Destiny'].astype(str).isin(selected_destinies)]
+    # Filter Destiny ONLY if user deselected something
+    if 'Destiny' in filtered_df.columns and len(selected_destinies) < len(all_destinies):
+        filtered_df = filtered_df[
+            filtered_df['Destiny'].astype(str).isin(selected_destinies) | filtered_df['Destiny'].isna()
+        ]
 
-    # All DOB, include unknown ones
+    # Date Range Filter
     if isinstance(date_range, tuple) and len(date_range) == 2:
         start_d, end_d = date_range
         date_mask = (
@@ -265,19 +271,19 @@ else:
         )
         if include_unknown_dob:
             date_mask = date_mask | filtered_df['Birth_date_clean'].isna()
-        
         filtered_df = filtered_df[date_mask]
 
+    # Cage Filter
     if selected_cages and cage_col:
         filtered_df = filtered_df[filtered_df[cage_col].astype(str).isin(selected_cages)]
 
+    # Search Tag
     if search_tag:
         tag_match = filtered_df['Ear_Tag_str'].str.contains(search_tag, case=False, na=False) if 'Ear_Tag_str' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
         father_match = filtered_df['Father'].astype(str).str.contains(search_tag, case=False, na=False) if 'Father' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
         mother_match = filtered_df['Mother'].astype(str).str.contains(search_tag, case=False, na=False) if 'Mother' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
         parents_match = filtered_df['Parents'].astype(str).str.contains(search_tag, case=False, na=False) if 'Parents' in filtered_df.columns else pd.Series(False, index=filtered_df.index)
         filtered_df = filtered_df[tag_match | father_match | mother_match | parents_match]
-
 
 # 6. Dashboard Render
 title_prefix = selected_source
