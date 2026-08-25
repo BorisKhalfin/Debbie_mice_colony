@@ -203,7 +203,7 @@ else:
 
 # DOB Filter
 valid_dates = df_raw['Birth_date_clean'].dropna()
-if not valid_dates.empty and selected_source != "Experimental Mice 🧪":
+if not valid_dates.empty and selected_source != "Experiments 2026-2027":
     min_date = valid_dates.min().date()
     max_date = valid_dates.max().date()
     date_range = st.sidebar.date_input(
@@ -383,13 +383,13 @@ with tab1:
             st.plotly_chart(fig_cre, use_container_width=True)
 
         if selected_source == "Experiments 2026-2027" and 'Age_M_num' in filtered_df.columns:
-            st.subheader("Age_M Distribution (Months)")
+            st.subheader("Age Distribution (Months)")
             fig_age = px.histogram(
                 filtered_df,
                 x='Age_M_num',
                 nbins=15,
                 color='Sex',
-                title="Age Distribution of Experimental Cohort"
+                title="Lifespan duration"
             )
             fig_age.update_layout(**white_layout)
             st.plotly_chart(fig_age, use_container_width=True)
