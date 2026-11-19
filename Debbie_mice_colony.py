@@ -128,6 +128,13 @@ else:
 
 try:
     df_raw = load_data(current_url)
+ 
+# Removing dead from "At our service" after chenge of the spreadsheet when the list dead is now autofiltered.
+try:
+    df_raw = load_data(current_url)
+    if selected_source == "At our service 🐭" and len(df_raw.columns) > 15:
+        df_raw = df_raw[df_raw.iloc[:, 15].astype(str).str.strip().str.lower() != 'dead']
+except Exception as e:
 except Exception as e:
     st.error(f"Error loading data from Google Spreadsheet: {e}")
     st.stop()
