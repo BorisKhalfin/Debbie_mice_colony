@@ -125,9 +125,6 @@ elif selected_source == "Experiments 2026-2027":
     current_url = URL_EXP_MICE
 else:
     current_url = URL_ALL_MICE
-
-try:
-    df_raw = load_data(current_url)
  
 # Removing dead from "At our service" after chenge of the spreadsheet when the list dead is now autofiltered.
 try:
